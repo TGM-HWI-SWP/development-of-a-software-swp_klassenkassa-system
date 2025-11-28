@@ -1,0 +1,28 @@
+{
+  "transactions": [
+    {
+      "id": 1,
+      "type": "einzahlung",
+      "amount": 10.0,
+      "description": "Startkapital",
+      "timestamp": "2025-03-01T08:15:23"
+    },
+    {
+      "id": 2,
+      "type": "ausgabe",
+      "amount": 2.5,
+      "description": "Kekse",
+      "timestamp": "2025-03-02T09:30:00"
+    },
+    {
+      "id": 3,
+      "type": "einzahlung",
+      "amount": 20.0,
+      "description": "Elternbeitrag",
+      "timestamp": "2025-03-03T11:10:45"
+    }
+  ],
+  "balance": {
+    "current_total": 27.5
+  }
+}
