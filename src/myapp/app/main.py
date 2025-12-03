@@ -1,24 +1,47 @@
 import sys
 from pathlib import Path
 
-from myapp.models import Transaction, Balance
 from datetime import datetime
 import argparse
+
+# Wenn die Datei direkt als Skript gestartet wird (z.B. "python main.py"),
+# stelle sicher, dass der `src`-Ordner im `sys.path` ist, damit
+# `import myapp...` funktioniert.
+if __package__ is None:
+	# Versuche, den Ordner namens 'src' in den Vorfahren zu finden und
+	# diesen Pfad zu `sys.path` hinzuzufügen. Falls kein 'src' gefunden
+	# wird, verwenden wir einen pragmatischen Fallback (parents[2]).
+	p = Path(__file__).resolve()
+	src_dir = None
+	# Prefer an ancestor that contains the `myapp` package directory
+	for parent in p.parents:
+		if (parent / "myapp").is_dir():
+			src_dir = parent
+			break
+	if src_dir is None:
+		# Fallback: look for an ancestor literally named 'src'
+		for parent in p.parents:
+			if parent.name == "src":
+				src_dir = parent
+				break
+	if src_dir is None:
+		try:
+			src_dir = p.parents[2]
+		except Exception:
+			src_dir = p.parent
+	src_str = str(src_dir)
+	if src_str not in sys.path:
+		sys.path.insert(0, src_str)
+
+
+# Nun, da `src` (falls nötig) im `sys.path` ist, können wir die Projekt-Imports sicher durchführen
+from myapp.models import Transaction, Balance
 from myapp.controller import (
 	load_from_json,
 	save_to_json,
 	calculate_balance,
 	add_transaction,
 )
-
-# Wenn die Datei direkt als Skript gestartet wird (z.B. "python main.py"),
-# stelle sicher, dass der `src`-Ordner im `sys.path` ist, damit
-# `import myapp...` funktioniert.
-if __package__ is None:
-	src_dir = Path(__file__).resolve().parents[2]
-	src_str = str(src_dir)
-	if src_str not in sys.path:
-		sys.path.insert(0, src_str)
 
 
 def _get_data_path() -> str:
