@@ -1,15 +1,7 @@
 import sys
 from pathlib import Path
 
-# Wenn die Datei direkt als Skript gestartet wird (z.B. "python main.py"),
-# stelle sicher, dass der `src`-Ordner im `sys.path` ist, damit
-# `import myapp...` funktioniert.
-if __package__ is None:
-	src_dir = Path(__file__).resolve().parents[2]
-	src_str = str(src_dir)
-	if src_str not in sys.path:
-		sys.path.insert(0, src_str)
-
+from myapp.models import Transaction, Balance
 from datetime import datetime
 import argparse
 from myapp.controller import (
@@ -18,7 +10,15 @@ from myapp.controller import (
 	calculate_balance,
 	add_transaction,
 )
-from myapp.models import Transaction, Balance
+
+# Wenn die Datei direkt als Skript gestartet wird (z.B. "python main.py"),
+# stelle sicher, dass der `src`-Ordner im `sys.path` ist, damit
+# `import myapp...` funktioniert.
+if __package__ is None:
+	src_dir = Path(__file__).resolve().parents[2]
+	src_str = str(src_dir)
+	if src_str not in sys.path:
+		sys.path.insert(0, src_str)
 
 
 def _get_data_path() -> str:
