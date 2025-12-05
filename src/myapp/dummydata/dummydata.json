@@ -1,0 +1,43 @@
+{
+  "transactions": [
+    {
+      "id": 1,
+      "type": "einzahlung",
+      "amount": 10.0,
+      "description": "Startkapital",
+      "timestamp": "2025-03-01T08:15:23"
+    },
+    {
+      "id": 2,
+      "type": "ausgabe",
+      "amount": 2.5,
+      "description": "Kekse",
+      "timestamp": "2025-03-02T09:30:00"
+    },
+    {
+      "id": 3,
+      "type": "einzahlung",
+      "amount": 20.0,
+      "description": "Elternbeitrag",
+      "timestamp": "2025-03-03T11:10:45"
+    },
+    {
+      "id": 4,
+      "type": "ausgabe",
+      "amount": 5.0,
+      "description": "bubatz",
+      "timestamp": "2025-12-05T09:02:58.638645"
+    },
+    {
+      "id": 5,
+      "type": "einzahlung",
+      "amount": 5000.0,
+      "description": "illegaler Waffenhandel",
+      "timestamp": "2025-12-05T09:06:29.638683"
+    }
+
+  ],
+  "balance": {
+    "current_total": 5022.5
+  }
+}
