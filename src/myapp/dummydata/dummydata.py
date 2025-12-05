@@ -25,7 +25,6 @@ def load_dummy_data() -> Tuple[List[Transaction], Balance]:
                 if isinstance(ts, str):
                     ts = datetime.fromisoformat(ts)
                 ttype = obj.get("type")
-                # Accept English types and convert
                 if ttype == "income":
                     ttype = "einzahlung"
                 elif ttype == "expense":
@@ -42,12 +41,10 @@ def load_dummy_data() -> Tuple[List[Transaction], Balance]:
             bal = data.get("balance", {})
             current_total = bal.get("current_total")
             if current_total is None:
-                # compute simple balance
                 current_total = sum(t.amount if t.type == "einzahlung" else -t.amount for t in transactions)
             return transactions, Balance(current_total=float(current_total))
         except Exception:
             pass
-    # Fallback
     total = sum(t.amount if t.type == "einzahlung" else -t.amount for t in _FALLBACK_TRANSACTIONS)
     return _FALLBACK_TRANSACTIONS.copy(), Balance(current_total=float(total))
 

@@ -4,22 +4,17 @@ from pathlib import Path
 from datetime import datetime
 import argparse
 
-# Wenn die Datei direkt als Skript gestartet wird (z.B. "python main.py"),
-# stelle sicher, dass der `src`-Ordner im `sys.path` ist, damit
-# `import myapp...` funktioniert.
+
+# Adjust sys.path for direct execution
 if __package__ is None:
-	# Versuche, den Ordner namens 'src' in den Vorfahren zu finden und
-	# diesen Pfad zu `sys.path` hinzuzufügen. Falls kein 'src' gefunden
-	# wird, verwenden wir einen pragmatischen Fallback (parents[2]).
+
 	p = Path(__file__).resolve()
 	src_dir = None
-	# Prefer an ancestor that contains the `myapp` package directory
 	for parent in p.parents:
 		if (parent / "myapp").is_dir():
 			src_dir = parent
 			break
 	if src_dir is None:
-		# Fallback: look for an ancestor literally named 'src'
 		for parent in p.parents:
 			if parent.name == "src":
 				src_dir = parent
@@ -33,8 +28,7 @@ if __package__ is None:
 	if src_str not in sys.path:
 		sys.path.insert(0, src_str)
 
-
-# Nun, da `src` (falls nötig) im `sys.path` ist, können wir die Projekt-Imports sicher durchführen
+#imports after path adjustment
 from myapp.models import Transaction, Balance
 from myapp.controller import (
 	load_from_json,
@@ -59,9 +53,7 @@ def main() -> None:
 	data_path = _get_data_path()
 	transactions, balance = load_from_json(data_path)
 
-	# Batch mode: execute given commands and exit
 	if args.batch is not None:
-		# args.batch can be empty list if --batch provided without values
 		cmd = args.batch[0] if len(args.batch) > 0 else "list"
 		if cmd == "list":
 			for t in transactions:
@@ -90,7 +82,6 @@ def main() -> None:
 			print("Gespeichert.")
 			return
 
-	# Interactive mode (unchanged UX)
 	while True:
 		print("\nKlassenkassa — Menü")
 		print("1) Transaktionen auflisten")
@@ -130,5 +121,12 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-	main()
+	if len(sys.argv) > 1:
+		main()
+	else:
+		try:
+			from myapp.gui.main import run as run_gui
 
+			run_gui()
+		except Exception:
+			main()
