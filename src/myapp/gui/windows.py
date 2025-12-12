@@ -33,7 +33,7 @@ def _ensure_src_in_path():
 
 _ensure_src_in_path()
 
-from myapp.controller import load_from_json, save_to_json, calculate_balance, add_transaction
+from myapp.adapters import db
 from myapp.models import Transaction
 
 
@@ -44,8 +44,10 @@ class GUIApp:
         self.master.geometry("820x520")
         self._setup_style()
 
-        self.data_path = Path(__file__).resolve().parents[1] / "dummydata" / "dummydata.json"
-        self.transactions, self.balance = load_from_json(str(self.data_path))
+        # Mit der Memory-Datenbank verbinden und Startdaten holen
+        db.connect()
+        self.transactions = db.get_all_transactions()
+        self.balance = db.get_balance()
 
         self._build_widgets()
         self._refresh_list()
@@ -61,7 +63,7 @@ class GUIApp:
         except Exception:
             pass
 
-        bg = "#0a0f1f"  
+        bg = "#0a0f1f"
         fg = "#e8f6ff"
         neon = "#00eaff"
         neon2 = "#b300ff"
@@ -205,6 +207,10 @@ class GUIApp:
 
     # -------------------------------------------------------------------------
     def _refresh_list(self):
+        # aktuelle Daten aus der Memory-DB holen
+        self.transactions = db.get_all_transactions()
+        self.balance = db.get_balance()
+
         for i in self.tree.get_children():
             self.tree.delete(i)
         for t in self.transactions:
@@ -223,23 +229,28 @@ class GUIApp:
             return
 
         desc = self.desc_entry.get().strip()
-        new_id = max((t.id for t in self.transactions), default=0) + 1
 
-        try:
-            t = Transaction(id=new_id, type=ttype, amount=amt, description=desc, timestamp=datetime.now())
-        except Exception as e:
-            messagebox.showerror("Validierungsfehler", str(e))
-            return
-
-        current_total = calculate_balance(self.transactions)
-
+        # aktuellen Kontostand aus DB holen und prüfen, ob die Transaktion ins Minus gehen würde
+        current_total = db.get_balance().current_total
         new_total = current_total + amt if ttype == "einzahlung" else current_total - amt
         if new_total < 0:
             messagebox.showwarning("Nicht erlaubt", "Diese Transaktion würde den Kontostand ins Minus bringen.")
             return
 
-        add_transaction(self.transactions, t)
-        self.balance.current_total = new_total
+        # Transaktion in der DB anlegen
+        try:
+            # Optional: zuerst Transaction für Validierung bauen
+            _ = Transaction(id=0, type=ttype, amount=amt, description=desc, timestamp=datetime.now())
+            db.create_transaction(
+                type_=ttype,
+                amount=amt,
+                description=desc,
+                timestamp=datetime.now(),
+            )
+        except Exception as e:
+            messagebox.showerror("Validierungsfehler", str(e))
+            return
+
         self._refresh_list()
 
         self.amount_entry.delete(0, tk.END)
@@ -247,14 +258,20 @@ class GUIApp:
 
     # -------------------------------------------------------------------------
     def _save(self):
-        try:
-            save_to_json(str(self.data_path), self.transactions, self.balance)
-            messagebox.showinfo("Gespeichert", "Daten wurden gespeichert.")
-        except Exception as e:
-            messagebox.showerror("Fehler", f"Speichern fehlgeschlagen: {e}")
+        # Memory-DB speichert nur im RAM – kein echtes Speichern
+        messagebox.showinfo(
+            "Hinweis",
+            "Die aktuelle Memory-Datenbank speichert nur im Arbeitsspeicher.\n"
+            "Es wird keine Datei auf der Festplatte geschrieben."
+        )
 
 
 def run_gui():
     root = tk.Tk()
     app = GUIApp(root)
     root.mainloop()
+    # optional: nach GUI-Ende die DB trennen, falls dein Adapter das unterstützt
+    try:
+        db.disconnect()
+    except Exception:
+        pass
