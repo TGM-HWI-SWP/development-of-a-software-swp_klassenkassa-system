@@ -1,7 +1,10 @@
-from fastapi import FastAPI, HTTPException
-from datetime import datetime, date as Date
-from pydantic import BaseModel, Field
+from datetime import date as Date
+from datetime import datetime
 from typing import List
+
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
+
 from myapp.adapters import db
 
 app = FastAPI(title="Klassenkassa Backend")
@@ -20,7 +23,7 @@ class TxIn(BaseModel):
 
 
 class TxOut(BaseModel):
-    id: str
+    id: int  # Changed from str to int
     type: str
     amount: float
     description: str
@@ -36,7 +39,7 @@ class SavingGoalIn(BaseModel):
 
 
 class SavingGoalOut(BaseModel):
-    id: str
+    id: int  # Changed from str to int
     name: str
     amount: float
     created_at: str
@@ -47,7 +50,7 @@ class StudentIn(BaseModel):
 
 
 class StudentOut(BaseModel):
-    id: str
+    id: int  # Changed from str to int
     name: str
     created_at: str
 
