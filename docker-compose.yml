@@ -1,0 +1,40 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: klassenkassa-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  backend:
+    container_name: klassenkassa-backend
+    build:
+      context: .
+      dockerfile: src/myapp/backend/Dockerfile
+    environment:
+      - MONGO_URI=mongodb://mongo:27017
+      - MONGO_DB=klassenkassa
+    depends_on:
+      - mongo
+
+    ports:
+      - "8000:8000"
+    command: ["uvicorn", "myapp.backend.api:app", "--host", "0.0.0.0", "--port", "8000"]
+
+  frontend:
+    container_name: klassenkassa-frontend
+    build:
+      context: .
+      dockerfile: src/myapp/frontend/Dockerfile
+    environment:
+      - BACKEND_URL=http://backend:8000
+      - PYTHONPATH=/app/src
+    depends_on:
+      - backend
+    ports:
+      - "7860:7860"
+    command: ["python", "-m", "myapp.frontend.gradio_app"]
+
+volumes:
+  mongo_data:

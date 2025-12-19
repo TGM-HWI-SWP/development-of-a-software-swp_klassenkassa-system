@@ -1,6 +1,6 @@
-# src/myapp/adapters/__init__.py
+import os
 
-from . import db_memory
-
-# Was dein main.py importieren soll:
-db = db_memory
+if os.getenv("DB_MODE") == "memory":
+    from . import db_memory as db
+else:
+    from . import db_mongo as db
