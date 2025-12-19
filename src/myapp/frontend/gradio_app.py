@@ -139,13 +139,15 @@ with gr.Blocks(title="Klassenkassa – Verwaltungsoberfläche") as demo:
 
         with gr.Column(scale=3):
             gr.Markdown("## Neue Transaktion")
-            tx_amount = gr.Number(label="Betrag", value=0)
-            tx_type = gr.Dropdown(["einzahlung", "ausgabe"], value="einzahlung", label="Transaktionstyp")
-            tx_category = gr.Textbox(label="Kategorie", placeholder="z. B. Ausflug, Material, Spende")
-            tx_student = gr.Textbox(label="Schüler (optional)")
+            tx_amount = gr.Number(label="*Betrag", value=0)
+            tx_type = gr.Dropdown(["einzahlung", "ausgabe"], value="einzahlung", label="*Transaktionstyp")
+            tx_category = gr.Textbox(label="*Kategorie", placeholder="z. B. Ausflug, Material, Spende")
+            tx_student = gr.Textbox(label="Schüler")
             tx_desc = gr.Textbox(label="Beschreibung", lines=3)
             tx_date = gr.Textbox(label="Datum (YYYY-MM-DD)", value=str(dt_date.today()))
-
+            gr.Markdown(
+        "*Mit \\* markierte Felder sind Pflichtfelder!*"
+            )
             with gr.Row():
                 btn_add_tx = gr.Button("Transaktion hinzufügen", variant="primary")
                 btn_refresh = gr.Button("Aktualisieren")
