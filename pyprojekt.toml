@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "klassenkassa"
+version = "1.0.0"
+description = "Modulares Klassenkassa-System zur Verwaltung von Transaktionen und Guthaben"
+readme = "README.md"
+requires-python = ">=3.10"
+
+authors = [
+    { name = "Wippel Sofia" },
+    { name = "Theussl Felix" },
+    { name = "Zwanzinger Max" }
+]
+
+dependencies = [
+    "pymongo",
+    "fastapi",
+    "uvicorn[standard]",
+    "gradio",
+    "requests",
+    "pydantic",
+    "pytest",
+    "mypy"
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["src"]
+python_files = ["test_*.py"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+ignore_missing_imports = true

@@ -40,7 +40,7 @@ python -m myapp.dummydata.dummydata
 
 ---
 
-## ✅ Features (MVP)
+## Features (MVP)
 - Transaktion anlegen
 - Transaktionen auflisten
 - Kontostand berechnen
@@ -48,7 +48,7 @@ python -m myapp.dummydata.dummydata
 
 ---
 
-## 🧪 Tests
+##  Tests
 Contract-Tests stellen sicher, dass:
 - Schnittstellen eingehalten werden
 - Dummy- und echte Implementierungen gleich funktionieren
@@ -58,11 +58,11 @@ Contract-Tests stellen sicher, dass:
 
 
 
-## 🌿 Branching & Commits
+##  Branching & Commits
 **Branches:**
 - main (stabil)
 - develop (Entwicklung)
-- feature/, bugfix/, hotfix/, refactor/, docs/
+- mit-docker
 
 **Commits:**
 Format:
@@ -76,7 +76,7 @@ feat: add transaction validation
 
 ---
 
-## 👥 Team
+## Team
 Projekt im Rahmen des SWP-Unterrichts – Klassenkassa-System
 Wippel Sofia
 Theussl Felix

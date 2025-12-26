@@ -4,3 +4,5 @@ uvicorn[standard]
 gradio
 requests
 pydantic
+pytest
+mypy
