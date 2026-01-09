@@ -2,42 +2,50 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, date
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
-from pymongo import MongoClient, ASCENDING
+from pymongo import ASCENDING, MongoClient
 from pymongo.collection import Collection
+from pymongo.database import Database
 
-from myapp.models import Transaction, Balance
+from myapp.models import Balance, Transaction
 
-
-# -----------------------------------------------------------------------------
-# Config (Docker: nutze Service-Name "mongo" statt localhost)
-# -----------------------------------------------------------------------------
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://mongo:27017")
 DB_NAME = os.getenv("MONGO_DB", "klassenkassa")
 
 COL_TX = "transactions"
 COL_BAL = "balance"
+COL_GOALS = "savings_goals"
+COL_STUDENTS = "students"
 
+MAX_SAVING_GOALS = 3
 
-_client: MongoClient | None = None
-_db = None
-_tx: Collection | None = None
-_bal: Collection | None = None
+Doc = Dict[str, Any]
+
+_client: Optional[MongoClient[Doc]] = None
+_db: Optional[Database[Doc]] = None
+_tx: Optional[Collection[Doc]] = None
+_bal: Optional[Collection[Doc]] = None
+_goals: Optional[Collection[Doc]] = None
+_students: Optional[Collection[Doc]] = None
 
 
 def connect() -> None:
-    global _client, _db, _tx, _bal
+    global _client, _db, _tx, _bal, _goals, _students
 
-    _client = MongoClient(MONGO_URI)
+    _client = MongoClient[Doc](MONGO_URI)
     _db = _client[DB_NAME]
+
     _tx = _db[COL_TX]
     _bal = _db[COL_BAL]
+    _goals = _db[COL_GOALS]
+    _students = _db[COL_STUDENTS]
 
-    # fortlaufende int-ID (unique)
     _tx.create_index([("id", ASCENDING)], unique=True)
+    _goals.create_index([("id", ASCENDING)], unique=True)
+    _students.create_index([("id", ASCENDING)], unique=True)
+    _students.create_index([("name", ASCENDING)], unique=True)
 
-    # Balance-Dokument sicherstellen
     _bal.update_one(
         {"_id": "balance"},
         {"$setOnInsert": {"current_total": 0.0}},
@@ -46,104 +54,136 @@ def connect() -> None:
 
 
 def disconnect() -> None:
-    global _client, _db, _tx, _bal
-    if _client:
+    global _client, _db, _tx, _bal, _goals, _students
+    if _client is not None:
         _client.close()
     _client = None
     _db = None
     _tx = None
     _bal = None
+    _goals = None
+    _students = None
 
 
-def _require() -> tuple[Collection, Collection]:
+def _require_tx_bal() -> Tuple[Collection[Doc], Collection[Doc]]:
     if _tx is None or _bal is None:
         raise RuntimeError("MongoDB not connected. Call db.connect() first.")
     return _tx, _bal
 
 
-def _tx_to_model(d: dict) -> Transaction:
-    # timestamp: in DB ist es iso string, daher hier wieder datetime machen
-    ts = d.get("timestamp")
-    ts_dt = datetime.fromisoformat(ts) if isinstance(ts, str) else ts
+def _require_goals() -> Collection[Doc]:
+    if _goals is None:
+        raise RuntimeError("MongoDB not connected (goals). Call db.connect() first.")
+    return _goals
 
-    # Optional: date (YYYY-MM-DD) wieder in date umwandeln, falls vorhanden
-    dt_val = d.get("date")
-    if isinstance(dt_val, str) and dt_val:
+
+def _require_students() -> Collection[Doc]:
+    if _students is None:
+        raise RuntimeError("MongoDB not connected (students). Call db.connect() first.")
+    return _students
+
+
+def _next_id_for(col: Collection[Doc]) -> int:
+    last = col.find_one({}, sort=[("id", -1)])
+    return 1 if not last else int(last.get("id", 0)) + 1
+
+
+def _parse_timestamp(value: Any) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str) and value.strip():
         try:
-            dt_val = date.fromisoformat(dt_val)
+            return datetime.fromisoformat(value)
         except ValueError:
-            dt_val = None
+            return datetime.now()
+    return datetime.now()
 
+
+def _parse_date(value: Any) -> Optional[date]:
+    if value is None:
+        return None
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        s = value.strip()
+        if not s:
+            return None
+        try:
+            return date.fromisoformat(s)
+        except ValueError:
+            return None
+    return None
+
+
+def _tx_to_model(d: Doc) -> Transaction:
     return Transaction(
-        id=int(d["id"]),
-        type=str(d["type"]),
-        amount=float(d["amount"]),
-        description=str(d.get("description", "")),
-        timestamp=ts_dt,
-        # Falls dein Transaction-Model diese Felder (noch) nicht hat, dann entferne sie.
-        # Wenn sie existieren: super, dann werden sie mitgefüllt.
-        category=str(d.get("category", "")),
-        student=str(d.get("student", "")),
-        date=dt_val,
+        id=int(d.get("id", 0)),
+        type=str(d.get("type", "einzahlung")),
+        amount=float(d.get("amount", 0.0)),
+        description=str(d.get("description", "") or ""),
+        timestamp=_parse_timestamp(d.get("timestamp")),
+        category=str(d.get("category", "") or ""),
+        student=str(d.get("student", "") or ""),
+        date=_parse_date(d.get("date")),
     )
 
 
-def _recalculate_balance(tx: Collection, bal: Collection) -> float:
+def _recalculate_balance(tx: Collection[Doc], bal: Collection[Doc]) -> float:
     income = tx.aggregate(
-        [
-            {"$match": {"type": "einzahlung"}},
-            {"$group": {"_id": None, "sum": {"$sum": "$amount"}}},
-        ]
+        [{"$match": {"type": "einzahlung"}}, {"$group": {"_id": None, "sum": {"$sum": "$amount"}}}]
     )
     expense = tx.aggregate(
-        [
-            {"$match": {"type": "ausgabe"}},
-            {"$group": {"_id": None, "sum": {"$sum": "$amount"}}},
-        ]
+        [{"$match": {"type": "ausgabe"}}, {"$group": {"_id": None, "sum": {"$sum": "$amount"}}}]
     )
 
     income_sum = 0.0
     expense_sum = 0.0
+
     for x in income:
-        income_sum = float(x["sum"])
+        # x ist Doc-ähnlich
+        if isinstance(x, dict):
+            income_sum = float(x.get("sum", 0.0))
     for x in expense:
-        expense_sum = float(x["sum"])
+        if isinstance(x, dict):
+            expense_sum = float(x.get("sum", 0.0))
 
     total = income_sum - expense_sum
     bal.update_one({"_id": "balance"}, {"$set": {"current_total": total}}, upsert=True)
     return total
 
 
-def _next_id(tx: Collection) -> int:
-    last = tx.find_one({}, sort=[("id", -1)])
-    return 1 if not last else int(last["id"]) + 1
-
-
 # -------------------- CRUD: Transactions --------------------
 
 def get_all_transactions() -> List[Transaction]:
-    tx, _ = _require()
+    tx, _ = _require_tx_bal()
     docs = tx.find({}).sort("id", ASCENDING)
     return [_tx_to_model(d) for d in docs]
 
 
 def get_transaction_by_id(tx_id: int) -> Optional[Transaction]:
-    tx, _ = _require()
+    tx, _ = _require_tx_bal()
     d = tx.find_one({"id": int(tx_id)})
     return _tx_to_model(d) if d else None
+
+
+def get_balance() -> Balance:
+    _, bal = _require_tx_bal()
+    d = bal.find_one({"_id": "balance"})
+    if not d:
+        return Balance(current_total=0.0)
+    return Balance(current_total=float(d.get("current_total", 0.0)))
 
 
 def create_transaction(
     type_: str,
     amount: float,
     description: str = "",
-    timestamp: datetime | None = None,
-    *,
+    timestamp: Optional[datetime] = None,
     category: str = "",
     student: str = "",
-    date_: date | None = None,
+    date_: Optional[date] = None,
 ) -> Transaction:
-    tx, bal = _require()
+    tx, bal = _require_tx_bal()
 
     if type_ not in ("einzahlung", "ausgabe"):
         raise ValueError("type_ must be 'einzahlung' or 'ausgabe'")
@@ -154,14 +194,13 @@ def create_transaction(
     if date_ is None:
         date_ = date.today()
 
-    # Minus verhindern
     current_total = get_balance().current_total
     new_total = current_total + float(amount) if type_ == "einzahlung" else current_total - float(amount)
     if new_total < 0:
         raise ValueError("Diese Transaktion würde den Kontostand ins Minus bringen.")
 
-    new_id = _next_id(tx)
-    doc = {
+    new_id = _next_id_for(tx)
+    doc: Doc = {
         "id": new_id,
         "type": type_,
         "amount": float(amount),
@@ -169,75 +208,88 @@ def create_transaction(
         "timestamp": timestamp.isoformat(),
         "category": str(category),
         "student": str(student),
-        "date": date_.isoformat(),  # YYYY-MM-DD
+        "date": date_.isoformat(),
     }
+
     tx.insert_one(doc)
     _recalculate_balance(tx, bal)
-    return get_transaction_by_id(new_id)  # type: ignore
 
-
-def update_transaction(
-    tx_id: int,
-    *,
-    type_: str | None = None,
-    amount: float | None = None,
-    description: str | None = None,
-    timestamp: datetime | None = None,
-    category: str | None = None,
-    student: str | None = None,
-    date_: date | None = None,
-) -> Optional[Transaction]:
-    tx, bal = _require()
-    existing = get_transaction_by_id(tx_id)
-    if existing is None:
-        return None
-
-    new_type = existing.type if type_ is None else type_
-    new_amount = existing.amount if amount is None else float(amount)
-    new_desc = existing.description if description is None else str(description)
-    new_ts = existing.timestamp if timestamp is None else timestamp
-
-    # Wenn dein Transaction Model category/student/date hat:
-    new_cat = getattr(existing, "category", "") if category is None else category
-    new_student = getattr(existing, "student", "") if student is None else student
-    new_date = getattr(existing, "date", None) if date_ is None else date_
-
-    if new_type not in ("einzahlung", "ausgabe"):
-        raise ValueError("type_ must be 'einzahlung' or 'ausgabe'")
-
-    update_doc = {
-        "type": new_type,
-        "amount": new_amount,
-        "description": new_desc,
-        "timestamp": new_ts.isoformat(),
-        "category": str(new_cat or ""),
-        "student": str(new_student or ""),
-        "date": new_date.isoformat() if new_date else "",
-    }
-
-    tx.update_one({"id": int(tx_id)}, {"$set": update_doc})
-
-    total = _recalculate_balance(tx, bal)
-    if total < 0:
-        raise ValueError("Update würde den Kontostand ins Minus bringen.")
-
-    return get_transaction_by_id(tx_id)
+    created = tx.find_one({"id": new_id})
+    if not created:
+        raise RuntimeError("Insert failed: transaction not found after insert.")
+    return _tx_to_model(created)
 
 
 def delete_transaction(tx_id: int) -> bool:
-    tx, bal = _require()
+    tx, bal = _require_tx_bal()
     res = tx.delete_one({"id": int(tx_id)})
-    if res.deleted_count:
+    if int(res.deleted_count) > 0:
         _recalculate_balance(tx, bal)
         return True
     return False
 
 
-# -------------------- Balance --------------------
+# -------------------- Savings Goals --------------------
 
-def get_balance() -> Balance:
-    _, bal = _require()
-    d = bal.find_one({"_id": "balance"})
-    if not d:
-        return Balance(current_total=0.0)
-    return Balance(current_total=float(d.get("current_total", 0.0)))
+def count_savings_goals() -> int:
+    goals = _require_goals()
+    return int(goals.count_documents({}))
+
+
+def get_savings_goals(limit: int = MAX_SAVING_GOALS) -> List[Dict[str, Any]]:
+    goals = _require_goals()
+    docs = goals.find({}).sort("id", -1).limit(int(limit))
+    return [
+        {"id": int(d.get("id", 0)), "name": str(d.get("name", "")), "amount": float(d.get("amount", 0.0)), "created_at": str(d.get("created_at", ""))}
+        for d in docs
+    ]
+
+
+def create_savings_goal(name: str, amount: float, created_at: Optional[datetime] = None) -> Dict[str, Any]:
+    goals = _require_goals()
+    name = (name or "").strip()
+    if not name:
+        raise ValueError("Name darf nicht leer sein.")
+    if count_savings_goals() >= MAX_SAVING_GOALS:
+        raise ValueError(f"Maximal {MAX_SAVING_GOALS} Sparziele erlaubt.")
+    if created_at is None:
+        created_at = datetime.now()
+
+    new_id = _next_id_for(goals)
+    doc: Dict[str, Any] = {"id": new_id, "name": name, "amount": float(amount or 0.0), "created_at": created_at.isoformat()}
+    goals.insert_one(doc)  # Doc passt zu Collection[Doc]
+    return doc
+
+
+def delete_savings_goal(goal_id: int) -> bool:
+    goals = _require_goals()
+    res = goals.delete_one({"id": int(goal_id)})
+    return bool(res.deleted_count)
+
+
+# -------------------- Students --------------------
+
+def get_students() -> List[Dict[str, Any]]:
+    students = _require_students()
+    docs = students.find({}).sort("id", ASCENDING)
+    return [{"id": int(d.get("id", 0)), "name": str(d.get("name", "")), "created_at": str(d.get("created_at", ""))} for d in docs]
+
+
+def create_student(name: str, created_at: Optional[datetime] = None) -> Dict[str, Any]:
+    students = _require_students()
+    name = (name or "").strip()
+    if not name:
+        raise ValueError("Name darf nicht leer sein.")
+    if created_at is None:
+        created_at = datetime.now()
+
+    new_id = _next_id_for(students)
+    doc: Dict[str, Any] = {"id": new_id, "name": name, "created_at": created_at.isoformat()}
+    students.insert_one(doc)
+    return doc
+
+
+def delete_student(student_id: int) -> bool:
+    students = _require_students()
+    res = students.delete_one({"id": int(student_id)})
+    return bool(res.deleted_count)

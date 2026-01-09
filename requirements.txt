@@ -6,3 +6,5 @@ requests
 pydantic
 pytest
 mypy
+types-requests
+types-requests
